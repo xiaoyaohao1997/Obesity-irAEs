@@ -1,41 +1,37 @@
+######################################################################################
+###Code for cellcaht analysis in colon
+######################################################################################
+merged_seurat_int=readRDS("merged_seurat_colon.rds")
+
 
 library(CellChat)
 table(merged_seurat_int$celllineage)
 unique(merged_seurat_int@meta.data$group)
 
-# ??ȡ?????б?
-groups <- c("ND_KO", "HFD_KO", "HFD_WT")  # ????????????????
+groups <- c("ND_KO", "HFD_KO", "HFD_WT")
 
-# ????CellChat?????б?
 cellchat_list <- list()
 for (group_name in groups) {
-  # ??ȡ?Ӽ?
   subset_seurat <- subset(merged_seurat_int, subset = group == group_name)
   
-  # ????CellChat????
   cellchat <- createCellChat(
-    object = subset_seurat[["RNA"]]$data,  # ??׼??????????
+    object = subset_seurat[["RNA"]]$data,
     meta = subset_seurat@meta.data,
     group.by = "celllineage" 
   )
-  
-  # ????ϸ?????ͱ?ǩ
+
   cellchat <- setIdent(cellchat, ident.use = "celllineage")
-  
-  # ???????ݿ⣨??????С????
-  CellChatDB <- CellChatDB.mouse  # ?? CellChatDB.mouse
+
+  CellChatDB <- CellChatDB.mouse  
   cellchat@DB <- CellChatDB
   
-  # Ԥ????
-  cellchat <- subsetData(cellchat)  # ???????źŻ???
+  cellchat <- subsetData(cellchat)  
   cellchat <- identifyOverExpressedGenes(cellchat)
   cellchat <- identifyOverExpressedInteractions(cellchat)
   
-  # ?ƶ?ͨѶ???磨?ؼ????裬??ʱ??
   cellchat <- computeCommunProb(cellchat, raw.use = TRUE, type = "truncatedMean", trim = 0.1)
-  cellchat <- filterCommunication(cellchat, min.cells = 10)  # ???˵?????ͨѶ
+  cellchat <- filterCommunication(cellchat, min.cells = 10)
   cellchat <- computeCommunProbPathway(cellchat, thresh = 0.05)
-  # ???浽?б?
   cellchat_list[[group_name]] <- cellchat
 }
 saveRDS(cellchat_list,file = "cellchat_list.int.RDS")

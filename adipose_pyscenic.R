@@ -1,802 +1,264 @@
-###################################################################################
-###################################################################################
-######code for pyscenic analysis and visualization
-###################################################################################
-###################################################################################
-loom <- open_loom("./adipose.aucell.loom")
-regulons_incidMat <- get_regulons(loom, column.attr.name="Regulons")
-
-regulons_incidMat[1:4,1:4]
-
-regulons <- regulonsToGeneLists(regulons_incidMat)
-regulonAUC <- get_regulons_AUC(loom,column.attr.name='RegulonsAUC')
-regulonAucThresholds <- get_regulon_thresholds(loom)
-tail(regulonAucThresholds[order(as.numeric(names(regulonAucThresholds)))])
-
-embeddings <- get_embeddings(loom)  
-close_loom(loom)
-
-rownames(regulonAUC)
-names(regulons)
-
-######################## visualization
-sub_regulonAUC <- regulonAUC[,match(colnames(merged_seurat_fat),colnames(regulonAUC))]
-dim(sub_regulonAUC)
-merged_seurat_fat
-
-identical(colnames(sub_regulonAUC), colnames(merged_seurat_fat))
-
-cellClusters <- data.frame(row.names = colnames(merged_seurat_fat), 
-                           seurat_clusters = as.character(merged_seurat_fat$celllineage))
-cellTypes <- data.frame(row.names = colnames(merged_seurat_fat), 
-                        celltype = merged_seurat_fat$celllineage)
-head(cellTypes)
-head(cellClusters)
-sub_regulonAUC[1:4,1:4] 
-
-auc_mat <- assay(sub_regulonAUC)
-regulon_assay <- CreateAssayObject(counts = auc_mat)
-merged_seurat_fat[["RegulonAUC"]] <- regulon_assay
-DefaultAssay(merged_seurat_fat) <- "RegulonAUC"
+######################################################################################
+###Code for Cell communication analysis in adipose
+######################################################################################
+merged_seurat_colon=readRDS("merged_seurat_colon.rds")
 
 
-#save the regulon and target list
-regulons_targetgene.list=matrix(,ncol = 2,nrow = nrow(regulons_incidMat))
-regulons_targetgene.list[,1]=row.names(regulons_incidMat)
-for (i in 1:nrow(regulons_incidMat)) {
-  regulons_targetgene.list[i,2]=paste(colnames(regulons_incidMat)[regulons_incidMat[i,]!=0],collapse = ",")
+library(CellChat)
+table(merged_seurat_colon$celllineage)
+unique(merged_seurat_colon@meta.data$group)
+
+
+groups <- c("ND_KO", "HFD_KO", "HFD_WT")
+
+
+#standard process for cellchat
+cellchat_list <- list()
+for (group_name in groups) {
+  subset_seurat <- subset(merged_seurat_colon, subset = group == group_name)
+  cellchat <- createCellChat(
+    object = subset_seurat[["RNA"]]$data,
+    meta = subset_seurat@meta.data,
+    group.by = "celllineage" 
+  )
+  cellchat <- setIdent(cellchat, ident.use = "celllineage")
+  CellChatDB <- CellChatDB.mouse 
+  cellchat@DB <- CellChatDB
+  cellchat <- subsetData(cellchat)
+  cellchat <- identifyOverExpressedGenes(cellchat)
+  cellchat <- identifyOverExpressedInteractions(cellchat)
+  cellchat <- computeCommunProb(cellchat, raw.use = TRUE, type = "truncatedMean", trim = 0.1)
+  cellchat <- filterCommunication(cellchat, min.cells = 10)
+  cellchat <- computeCommunProbPathway(cellchat, thresh = 0.05)?
+    cellchat_list[[group_name]] <- cellchat
 }
-write.csv(regulons_targetgene.list,file="fat.regulons_targetgene.list.csv")
+saveRDS(cellchat_list,file = "cellchat_list.colon.RDS")
+
+#standard process for cellchat
+cellchat.colon$HFD_KO = computeCommunProbPathway(cellchat.colon$HFD_KO, thresh = 0.05)
+cellchat.colon$HFD_WT = computeCommunProbPathway(cellchat.colon$HFD_WT, thresh = 0.05)
+cellchat.colon$ND_KO = computeCommunProbPathway(cellchat.colon$ND_KO, thresh = 0.05)
+cellchat.colon$HFD_KO <- aggregateNet(cellchat.colon$HFD_KO)
+cellchat.colon$HFD_WT <- aggregateNet(cellchat.colon$HFD_WT)
+cellchat.colon$ND_KO <- aggregateNet(cellchat.colon$ND_KO)
+cellchat.colon$HFD_KO <- netAnalysis_computeCentrality(cellchat.colon$HFD_KO, slot.name = "netP")
+cellchat.colon$HFD_WT <- netAnalysis_computeCentrality(cellchat.colon$HFD_WT, slot.name = "netP")
+cellchat.colon$ND_KO <- netAnalysis_computeCentrality(cellchat.colon$ND_KO, slot.name = "netP")
+
+#save csv results
+df.net.HFD_KO <- subsetCommunication(cellchat.colon$HFD_KO)
+df.netp.HFD_KO <- subsetCommunication(cellchat.colon$HFD_KO, slot.name = "netP")
+write.csv(df.net.HFD_KO,file="df.net.HFD_KO.csv")
+write.csv(df.netp.HFD_KO,file="df.netp.HFD_KO.csv")
+
+df.net.HFD_WT <- subsetCommunication(cellchat.colon$HFD_WT)
+df.netp.HFD_WT <- subsetCommunication(cellchat.colon$HFD_WT, slot.name = "netP")
+write.csv(df.net.HFD_WT,file="df.net.HFD_WT.csv")
+write.csv(df.netp.HFD_WT,file="df.netp.HFD_WT.csv")
+
+df.net.ND_KO <- subsetCommunication(cellchat.colon$ND_KO)
+df.netp.ND_KO <- subsetCommunication(cellchat.colon$ND_KO, slot.name = "netP")
+write.csv(df.net.ND_KO,file="df.net.ND_KO.csv")
+write.csv(df.netp.ND_KO,file="df.netp.ND_KO.csv")
 
 
 
-##TFs significant in  hfdko vs ndko
-results_list <- list()
-meta_data <- merged_seurat_fat@meta.data
-all_celltypes <- unique(meta_data$celllineage)
-regulons.to.plot=rownames(auc_mat)
-
-
-for (ct in all_celltypes) {
-  cells_ct <- rownames(meta_data[meta_data$celllineage == ct, ])
-  
-  df <- FetchData(merged_seurat_fat, vars = c(regulons.to.plot, "group")) %>%
-    tibble::rownames_to_column("cell") %>%
-    dplyr::filter(cell %in% cells_ct, group %in% c("ND_KO", "HFD_KO"))
-  
-  df$group <- factor(df$group, levels = c("ND_KO", "HFD_KO"))
-  
-  for (r in regulons.to.plot) {
-    if (length(unique(df$group)) == 2) {
-      avg_by_group <- df %>%
-        group_by(group) %>%
-        summarise(mean_auc = mean(.data[[r]], na.rm = TRUE)) %>%
-        pivot_wider(names_from = group, values_from = mean_auc, names_prefix = "mean_")
-      
-      delta <- avg_by_group$mean_HFD_KO - avg_by_group$mean_ND_KO
-      direction <- ifelse(delta > 0, "up", "down")
-      
-      test <- wilcox.test(df[[r]] ~ df$group)
-      
-      results_list[[paste(ct, r, sep = "_")]] <- data.frame(
-        celltype = ct,
-        regulon = r,
-        p.value = test$p.value,
-        mean_ND_KO = avg_by_group$mean_ND_KO,
-        mean_HFD_KO = avg_by_group$mean_HFD_KO,
-        delta = delta,
-        direction = direction
-      )
-    }
-  }
-}
-
-#adjust p
-results_ct.hfdko.ndko <- bind_rows(results_list) %>%
-  group_by(celltype) %>%
-  mutate(p.adj = p.adjust(p.value, method = "BH")) %>%
-  ungroup()
-
-print(head(results_ct.hfdko.ndko, 10))
-
-#save
-write.csv(results_ct.hfdko.ndko,file="fat.results_tf.hfdko.ndko.csv")
-results_ct.hfdko.ndko=read.csv("fat.results_tf.hfdko.ndko.csv")
-
-#add sig label
-results_ct.hfdko.ndko$sig="not_sig"
-results_ct.hfdko.ndko$sig[results_ct.hfdko.ndko$p.adj<0.05]="sig"
-head(results_ct.hfdko.ndko)
-results_ct.hfdko.ndko=results_ct.hfdko.ndko[results_ct.hfdko.ndko$p.adj<0.05,]
-results_ct.hfdko.ndko$index=paste(results_ct.hfdko.ndko$celltype,results_ct.hfdko.ndko$regulon,results_ct.hfdko.ndko$direction,sep="_")
-
-
-
-##TFs significant in  HFD_KO vs HFD_WT
-results_list <- list()
-meta_data <- merged_seurat_fat@meta.data
-all_celltypes <- unique(meta_data$celllineage)
-regulons.to.plot=rownames(auc_mat)
-
-
-for (ct in all_celltypes) {
-  cells_ct <- rownames(meta_data[meta_data$celllineage == ct, ])
-  
-  df <- FetchData(merged_seurat_fat, vars = c(regulons.to.plot, "group")) %>%
-    tibble::rownames_to_column("cell") %>%
-    dplyr::filter(cell %in% cells_ct, group %in% c("HFD_WT", "HFD_KO"))
-  
-  df$group <- factor(df$group, levels = c("HFD_WT", "HFD_KO"))
-  
-  for (r in regulons.to.plot) {
-    if (length(unique(df$group)) == 2) {
-      avg_by_group <- df %>%
-        group_by(group) %>%
-        summarise(mean_auc = mean(.data[[r]], na.rm = TRUE)) %>%
-        pivot_wider(names_from = group, values_from = mean_auc, names_prefix = "mean_")
-      
-      delta <- avg_by_group$mean_HFD_KO - avg_by_group$mean_HFD_WT
-      direction <- ifelse(delta > 0, "up", "down")
-      
-      test <- wilcox.test(df[[r]] ~ df$group)
-      
-      results_list[[paste(ct, r, sep = "_")]] <- data.frame(
-        celltype = ct,
-        regulon = r,
-        p.value = test$p.value,
-        mean_HFD_WT = avg_by_group$mean_HFD_WT,
-        mean_HFD_KO = avg_by_group$mean_HFD_KO,
-        delta = delta,
-        direction = direction
-      )
-    }
-  }
-}
-
-#adjust p
-results_ct.hfdko.hfdwt <- bind_rows(results_list) %>%
-  group_by(celltype) %>%
-  mutate(p.adj = p.adjust(p.value, method = "BH")) %>%
-  ungroup()
-
-
-print(head(results_ct.hfdko.hfdwt, 10))
-
-#save
-write.csv(results_ct.hfdko.hfdwt,file="fat.results_tf.hfdko.hfdwt.csv")
-results_ct.hfdko.hfdwt=read.csv("fat.results_tf.hfdko.hfdwt.csv")
-
-#add sig label
-results_ct.hfdko.hfdwt$sig="not_sig"
-results_ct.hfdko.hfdwt$sig[results_ct.hfdko.hfdwt$p.adj<0.05]="sig"
-results_ct.hfdko.hfdwt=results_ct.hfdko.hfdwt[results_ct.hfdko.hfdwt$p.adj<0.05,]
-head(results_ct.hfdko.hfdwt)
-results_ct.hfdko.hfdwt$index=paste(results_ct.hfdko.hfdwt$celltype,results_ct.hfdko.hfdwt$regulon,results_ct.hfdko.hfdwt$direction,sep="_")
-
-
-
-#########common in both comparison
-commonids=intersect(results_ct.hfdko.ndko$index,results_ct.hfdko.hfdwt$index)
-results_ct.hfdko.ndko.common=results_ct.hfdko.ndko[match(commonids, results_ct.hfdko.ndko$index),]
-results_ct.hfdko.hfdwt.common=results_ct.hfdko.hfdwt[match(commonids, results_ct.hfdko.hfdwt$index),]
-results_ct.hfdko.ndko.and.hfdko.hfdwt.common=cbind(results_ct.hfdko.ndko.common,results_ct.hfdko.hfdwt.common)
-
-#save common results
-write.csv(results_ct.hfdko.ndko.and.hfdko.hfdwt.common,file="fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common.csv")
-
-
-
-#####################################################################################
-## visualize results  (Prepare input for Gephi v0.10)
-#####################################################################################
-fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common=read.csv("../fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common.csv")
-library(tidyverse)
-library(igraph)
-library(ggraph)
-library(tidygraph)
-
-##read the regulon and target list
-regulons_targetgene.list=read.csv("./fat.regulons_targetgene.list.csv")
-regulons_targetgene.list=regulons_targetgene.list[,-1]
-
-fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common$target=regulons_targetgene.list[match(fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common$regulon, regulons_targetgene.list[,1]),2]
-
-
-fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common=na.omit(fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common)
-fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common.mac.up=fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common[fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common$celltype=="Macrophage" & fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common$direction=="up",]
-
-fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common$X.2=gsub("\\(\\+\\)","",fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common$regulon)
-
-##TF significant 
-tfs=c("Ets2(+)","Nfe2l2(+)","Spi1(+)","Pparg(+)","Irf5(+)")
-fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common.mac.up.tfs=fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common.mac.up[fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common.mac.up$regulon %in% tfs,]
-
-###dif TFs Ets2(+), Nfe2l2(+)
-target.list=list()
-for (i in 1:nrow(fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common.mac.up.tfs)) {
-  target.list[[i]]=strsplit(fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common.mac.up.tfs$target[i],split = ",")
-}
-
-
-###tf all, each cell each tf and it's target in a data.frame, for visualize
-target.list.all=list()
-for (i in 1:nrow(fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common)) {
-  target.list.all[[i]]=strsplit(fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common$target[i],split = ",")
-}
-tmp=length(unlist(target.list.all))
-
-target.df.all=fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common[rep(1, tmp),]
-target.df.all$target.gene=""
-target.df.all$target.gene=unlist(target.list.all)
-
-####replace with true data
-index=1
-for (i in 1:nrow(fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common)) {
-  target.df.all[index:(index+length(target.list.all[[i]][[1]])-1),1:24]=fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common[i,1:24]
-  index=index+length(target.list.all[[i]][[1]])
-}
-
-####Data process for regulon network visualize
-head(target.df.all)
-target.df.all$source.gene=target.df.all$regulon
-target.df.all$source.gene=gsub("\\(\\+\\)","",target.df.all$source.gene)
-
-target.df.all$relation="regulate"
-
-###add regulon and mac (cell types)
-tmp=fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common
-tmp$target.gene=fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common$regulon
-tmp$target.gene=gsub("\\(\\+\\)","",tmp$target.gene)
-tmp$source.gene=tmp$celltype
-tmp$relation="Direct"
-target.df.all=rbind(tmp,target.df.all)
-
-
-length(unique(unlist(target.list.all)))
-
-#########to node and edges
-#all edge data with both source and targt and edge type
-edges <- target.df.all %>% 
-  rename(from = source.gene, to = target.gene, relation = relation)
-
-#all node data with target genes
-nodes <- data.frame(
-  id = unique(c(target.df.all$source.gene, target.df.all$target.gene)),
-  label = unique(c(target.df.all$source.gene, target.df.all$target.gene))
+##############colon cell chat all in one
+object.list <- list(
+  HFD_KO = cellchat.colon$HFD_KO,
+  HFD_WT = cellchat.colon$HFD_WT,
+  ND_KO = cellchat.colon$ND_KO
 )
-edges=edges[,c(1:24,26,25,27)]
 
-edges.mac.up=edges[edges$celltype=="Macrophage" & edges$direction=="up",]
-write.table(edges.mac.up[,],file="edges.mac.up.edge.txt",sep="\t",row.names = F,col.names = T)
 
-edges.mac=edges[edges$celltype=="Macrophage",]
-which(colnames(edges.mac)=="direction")
-tmp=edges.mac[,c(25:27,9)]
-colnames(tmp)=c("Source","Target","Type","Direction")
-tmp[tmp[,3]=="regulate",4]=""
-
-##save edge results
-write.csv(tmp,file="fat.mac.edge.csv",fileEncoding = "UTF-8",row.names = F)
-
-#node data process
-nodes.mac <- data.frame(
-  id = unique(c(edges.mac$from, edges.mac$to)),
-  label = unique(c(edges.mac$from, edges.mac$to))
+cellchat.merged <- mergeCellChat(
+  object.list, 
+  add.names = names(object.list),
+  cell.prefix = TRUE 
 )
-nodes.mac$type="genes"
-nodes.mac$type[1]="Celltype"
 
-###match up tfs in nodes.mac, then update this data
-nodes.mac$type[match(fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common$X.2[fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common$celltype=="Macrophage" & fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common$direction=="up"], nodes.mac[,1])]="up"
-nodes.mac$type[match(fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common$X.2[fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common$celltype=="Macrophage" & fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common$direction=="down"], nodes.mac[,1])]="down"
-
-#save node results
-write.csv(nodes.mac,file="fat.mac.node.csv",fileEncoding = "UTF-8",row.names = F)
-
-#####################################################################################
-# replicate for bcell
-#####################################################################################
-edges.bcell=edges[edges$celltype=="B_cell",]
-which(colnames(edges.bcell)=="direction")
-tmp=edges.bcell[,c(25:27,9)]
-colnames(tmp)=c("Source","Target","Type","Direction")
-tmp[tmp[,3]=="regulate",4]=""
-write.csv(tmp,file="fat.bcell.edge.csv",fileEncoding = "UTF-8",row.names = F)
-nodes.bcell <- data.frame(
-  id = unique(c(edges.bcell$from, edges.bcell$to)),
-  label = unique(c(edges.bcell$from, edges.bcell$to))
+identical(
+  levels(object.list[[1]]@idents), 
+  levels(object.list[[2]]@idents)
 )
-nodes.bcell$type="genes"
-nodes.bcell$type[1]="Celltype"
 
-nodes.bcell$type[match(fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common$X.2[fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common$celltype=="B_cell" & fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common$direction=="up"], nodes.bcell[,1])]="up"
-nodes.bcell$type[match(fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common$X.2[fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common$celltype=="B_cell" & fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common$direction=="down"], nodes.bcell[,1])]="down"
-write.csv(nodes.bcell,file="fat.bcell.node.csv",fileEncoding = "UTF-8",row.names = F)
-
-#####################################################################################
-# replicate for Tcell
-#####################################################################################
-edges.tcell=edges[edges$celltype=="T_cell",]
-which(colnames(edges.tcell)=="direction")
-tmp=edges.tcell[,c(25:27,9)]
-colnames(tmp)=c("Source","Target","Type","Direction")
-tmp[tmp[,3]=="regulate",4]=""
-write.csv(tmp,file="fat.tcell.edge.csv",fileEncoding = "UTF-8",row.names = F)
-nodes.tcell <- data.frame(
-  id = unique(c(edges.tcell$from, edges.tcell$to)),
-  label = unique(c(edges.tcell$from, edges.tcell$to))
+identical(
+  levels(object.list[[1]]@idents), 
+  levels(object.list[[3]]@idents)
 )
-nodes.tcell$type="genes"
-nodes.tcell$type[1]="Celltype"
 
-nodes.tcell$type[match(fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common$X.2[fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common$celltype=="T_cell" & fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common$direction=="up"], nodes.tcell[,1])]="up"
-nodes.tcell$type[match(fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common$X.2[fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common$celltype=="T_cell" & fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common$direction=="down"], nodes.tcell[,1])]="down"
-write.csv(nodes.tcell,file="fat.tcell.node.csv",fileEncoding = "UTF-8",row.names = F)
+#### Compare LR pairs change in Macrophage 
 
-#####################################################################################
-# replicate for DC
-#####################################################################################
-edges.dc=edges[edges$celltype=="DC",]
-which(colnames(edges.dc)=="direction")
-tmp=edges.dc[,c(25:27,9)]
-colnames(tmp)=c("Source","Target","Type","Direction")
-tmp[tmp[,3]=="regulate",4]=""
-write.csv(tmp,file="fat.dc.edge.csv",fileEncoding = "UTF-8",row.names = F)
-nodes.dc <- data.frame(
-  id = unique(c(edges.dc$from, edges.dc$to)),
-  label = unique(c(edges.dc$from, edges.dc$to))
-)
-nodes.dc$type="genes"
-nodes.dc$type[1]="Celltype"
-
-nodes.dc$type[match(fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common$X.2[fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common$celltype=="DC" & fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common$direction=="up"], nodes.dc[,1])]="up"
-nodes.dc$type[match(fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common$X.2[fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common$celltype=="DC" & fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common$direction=="down"], nodes.dc[,1])]="down"
-write.csv(nodes.dc,file="fat.dc.node.csv",fileEncoding = "UTF-8",row.names = F)
-
-
-
-
-
-#####################################################################################
-# vlnplot of TFs and corresponding genes
-#####################################################################################
-modify_vlnplot <- function(obj, feature, pt.size = 0, plot.margin = unit(c(-0.75, 0, -0.75, 0), "cm"),...) {
-  p <- VlnPlot(obj, features = feature, pt.size = pt.size, ... ) +
-    xlab("") + ylab(feature) + ggtitle("") +
-    theme(legend.position = "none",
-          axis.text.x = element_blank(),
-          axis.text.y = element_blank(),
-          axis.ticks.x = element_blank(),
-          axis.ticks.y = element_line(),
-          axis.title.y = element_text(size = rel(1), angle = 0, vjust = 0.5),
-          plot.margin = plot.margin )+
-    scale_y_continuous(expand = expansion(mult = c(0.05, 0.2)))+
-    stat_compare_means(method = "wilcox.test",comparisons = my_comp,label = "p.signif",tip.length = 0,size = 6,step.increase = 0.1)
-  
-  return(p)
-}
-## main function
-StackedVlnPlot <- function(obj, features, pt.size = 0, plot.margin = unit(c(-0.75, 0, -0.75, 0), "cm"), ...) {
-  plot_list <- purrr::map(features, function(x) modify_vlnplot(obj = obj,feature = x, ...))
-  plot_list[[length(plot_list)]]<- plot_list[[length(plot_list)]] +
-    theme(axis.text.x=element_text(), axis.ticks.x = element_line())
-  p <- patchwork::wrap_plots(plotlist = plot_list, ncol = 1)
-  return(p)
-}
-
-target.group=c("HFD_KO","HFD_WT","ND_KO")
-my_comp=list(c("HFD_KO","ND_KO"),c("HFD_KO","HFD_WT"))
-pdf(file="fat.regulon.mac.vlnplot.pdf",width=3,height=6)
-StackedVlnPlot(subset(merged_seurat_fat,subset = group %in% target.group),ident="Macrophage", group.by="group",c("Ets2","Nfe2l2","Irf5"), pt.size=0, cols=c("#FF8080", "#FDCABF","#9B8EB6"))
+pdf(file="colon.mac.detailLR.HFDKO.NDKO.pdf",width=8,height=6)
+gg1 <- netAnalysis_signalingChanges_scatter(cellchat.merged, idents.use = "Macrophage",comparison = c(3,1))
+gg1 + scale_color_manual(values = rep("black", 4)) +
+  scale_shape_manual(values = rep(21, 4))
 dev.off()
 
-merged_seurat_fat@active.assay="RegulonAUC"
-pdf(file="fat.regulon.mac.vlnplot.activaty.pdf",width=4,height=6)
-p=StackedVlnPlot(subset(merged_seurat_fat,subset = group %in% target.group),ident="Macrophage",features=c("Ets2(+)","Nfe2l2(+)","Irf5(+)"),pt.size=0, cols=c("#FF8080", "#FDCABF","#9B8EB6"),group.by="group")+
-  ylab("Activaty Level")
-print(p)
-dev.off()
-
-merged_seurat_fat@active.assay="RegulonAUC"
-target.group=c("HFD_KO","HFD_WT","ND_KO")
-my_comp=list(c("HFD_KO","ND_KO"),c("HFD_KO","HFD_WT"))
-
-
-pdf(file="fat.regulon.mac.vlnplot.activity.ets2.pdf",width=4,height=6)
-VlnPlot(subset(merged_seurat_fat,subset = group %in% target.group),ident="Macrophage", group.by="group",features=c("Ets2(+)"), pt.size=0, cols=c("#FF8080", "#FDCABF","#9B8EB6"))+
-  geom_boxplot(width=.2,col="black",fill="white")+ 
-  stat_compare_means(method = "wilcox.test",comparisons = my_comp,label = "p.signif",tip.length = 0,size = 6)+
-  scale_y_continuous(expand = expansion(mult = c(0.05, 0.15)))+
-  theme(axis.title.x = element_blank())+
-  NoLegend()
+pdf(file="colon.mac.detailLR.HFDKO.HFDWT.pdf",width=8,height=6)
+gg1 <- netAnalysis_signalingChanges_scatter(cellchat.merged, idents.use = "Macrophage",comparison = c(2,1))
+gg1 + scale_color_manual(values = rep("black", 4)) +
+  scale_shape_manual(values = rep(21, 4))
 dev.off()
 
 
-#Visualize Ets2 expression
-ETS2_expression <- GetAssayData(merged_seurat_fat, assay = "RNA",slot="data")[c("Ets2"), ,drop=F]
-merged_seurat_fat=AddMetaData(merged_seurat_fat,t(ETS2_expression))
-
-Ets2_HFD_KO_mac <- merged_seurat_fat@meta.data[which(merged_seurat_fat@meta.data$group == "HFD_KO"&merged_seurat_fat@meta.data$celllineage =="Macrophage"),]$Ets2
-Ets2_HFD_WT_mac <- merged_seurat_fat@meta.data[which(merged_seurat_fat@meta.data$group == "HFD_WT"&merged_seurat_fat@meta.data$celllineage =="Macrophage"),]$Ets2
-Ets2_ND_KO_mac <- merged_seurat_fat@meta.data[which(merged_seurat_fat@meta.data$group == "ND_KO"&merged_seurat_fat@meta.data$celllineage =="Macrophage"),]$Ets2
-wilcox.test(Ets2_HFD_KO_mac, Ets2_HFD_WT_mac)
-wilcox.test(Ets2_HFD_KO_mac, Ets2_ND_KO_mac) 
-mean(Ets2_HFD_KO_mac)
-mean(Ets2_HFD_WT_mac)
-mean(Ets2_ND_KO_mac)
-wilcox.test(Ets2_HFD_KO_mac, Ets2_HFD_WT_mac)$p.value
-wilcox.test(Ets2_HFD_KO_mac, Ets2_ND_KO_mac)$p.value
-
-#Visualize Ets2 activity in mac
-ETS2_activaty <- GetAssayData(merged_seurat_fat, assay = "RegulonAUC")[c("Ets2(+)"), ,drop=F]
-merged_seurat_fat=AddMetaData(merged_seurat_fat,t(ETS2_activaty))
-
-Ets2_activaty_HFD_KO_mac <- merged_seurat_fat@meta.data[which(merged_seurat_fat@meta.data$group == "HFD_KO"&merged_seurat_fat@meta.data$celllineage =="Macrophage"),]$`Ets2(+)`
-Ets2_activaty_HFD_WT_mac <- merged_seurat_fat@meta.data[which(merged_seurat_fat@meta.data$group == "HFD_WT"&merged_seurat_fat@meta.data$celllineage =="Macrophage"),]$`Ets2(+)`
-Ets2_activaty_ND_KO_mac <- merged_seurat_fat@meta.data[which(merged_seurat_fat@meta.data$group == "ND_KO"&merged_seurat_fat@meta.data$celllineage =="Macrophage"),]$`Ets2(+)`
-wilcox.test(Ets2_activaty_HFD_KO_mac, Ets2_activaty_HFD_WT_mac)
-wilcox.test(Ets2_activaty_HFD_KO_mac, Ets2_activaty_ND_KO_mac) 
-mean(Ets2_activaty_HFD_KO_mac)
-mean(Ets2_activaty_HFD_WT_mac)
-mean(Ets2_activaty_ND_KO_mac)
-wilcox.test(Ets2_activaty_HFD_KO_mac, Ets2_activaty_HFD_WT_mac)$p.value
-wilcox.test(Ets2_activaty_HFD_KO_mac, Ets2_activaty_ND_KO_mac)$p.value
 
 
+##########################################################
+##Identify different regulated LRs between groups
+##########################################################
 
-#####################################################################################
-#Dotplot of TFs changes
-#####################################################################################
+#HFD_KO vs ND_KO
 
-#combine two comparison into a data.frame
-#using the delta (difference between comparison)
-for (i in unique(fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common$celltype)) {
-  eval(parse(text = paste0("fat.tf.common.",i,"=fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common[fat.results_ct.hfdko.ndko.and.hfdko.hfdwt.common$celltype==\"",i,"\",]")))
-  eval(parse(text = paste0("fat.tf.common.",i,"$delta.mean=(fat.tf.common.",i,"$delta + fat.tf.common.",i,"$delta.1) / 2")))
-  eval(parse(text = paste0("fat.tf.common.",i,"$logfoldchange1=log2(fat.tf.common.",i,"$mean_HFD_KO /fat.tf.common.",i,"$mean_ND_KO)")))
-  eval(parse(text = paste0("fat.tf.common.",i,"$logfoldchange2=log2(fat.tf.common.",i,"$mean_HFD_KO / fat.tf.common.",i,"$mean_HFD_WT)")))
-  eval(parse(text = paste0("fat.tf.common.",i,"$logfc.mean=(fat.tf.common.",i,"$logfoldchange1 + fat.tf.common.",i,"$logfoldchange2) / 2")))
-  
+pos.dataset = "HFD_KO"
+# define a char name used for storing the results of differential expression analysis
+features.name = paste0(pos.dataset, ".merged")
+# perform differential expression analysis 
+cellchat.merged.HFD_KO.ND_KO <- identifyOverExpressedGenes(cellchat.merged.HFD_KO.ND_KO, group.dataset = "datasets", pos.dataset = pos.dataset, features.name = features.name, only.pos = FALSE, thresh.pc = 0.1, thresh.fc = 0.05,thresh.p = 0.05, group.DE.combined = FALSE) 
+
+net.HFD_KO.ND_KO <- netMappingDEG(cellchat.merged.HFD_KO.ND_KO, features.name = features.name, variable.all = TRUE)
+net.up.HFD_KO.ND_KO <- subsetCommunication(cellchat.merged.HFD_KO.ND_KO, net = net.HFD_KO.ND_KO, datasets = "HFD_KO",ligand.logFC = 0.05, receptor.logFC = NULL)
+net.down.HFD_KO.ND_KO <- subsetCommunication(cellchat.merged.HFD_KO.ND_KO, net = net.HFD_KO.ND_KO, datasets = "ND_KO",ligand.logFC = -0.05, receptor.logFC = NULL)
+
+
+net.HFD_KO.ND_KO$index=paste(net.HFD_KO.ND_KO$source, net.HFD_KO.ND_KO$target, net.HFD_KO.ND_KO$interaction_name,sep = ".")
+net.up.HFD_KO.ND_KO$index=paste(net.up.HFD_KO.ND_KO$source, net.up.HFD_KO.ND_KO$target, net.up.HFD_KO.ND_KO$interaction_name,sep = ".")
+net.down.HFD_KO.ND_KO$index=paste(net.down.HFD_KO.ND_KO$source, net.down.HFD_KO.ND_KO$target, net.down.HFD_KO.ND_KO$interaction_name,sep = ".")
+net.HFD_KO.ND_KO$group="HFD_KO.ND_KO"
+net.up.HFD_KO.ND_KO$group="HFD_KO.ND_KO"
+net.down.HFD_KO.ND_KO$group="HFD_KO.ND_KO"
+
+write.csv(net.HFD_KO.ND_KO,file="net.HFD_KO.ND_KO.csv")
+write.csv(net.up.HFD_KO.ND_KO,file="net.up.HFD_KO.ND_KO.csv")
+write.csv(net.down.HFD_KO.ND_KO,file="net.down.HFD_KO.ND_KO.csv")
+
+
+#HFD_KO vs HFD_WT
+pos.dataset = "HFD_KO"
+features.name = paste0(pos.dataset, ".merged")
+cellchat.merged.HFD_KO.HFD_WT <- identifyOverExpressedGenes(cellchat.merged.HFD_KO.HFD_WT, group.dataset = "datasets", pos.dataset = pos.dataset, features.name = features.name, only.pos = FALSE, thresh.pc = 0.1, thresh.fc = 0.05,thresh.p = 0.05, group.DE.combined = FALSE) 
+
+net.HFD_KO.HFD_WT <- netMappingDEG(cellchat.merged.HFD_KO.HFD_WT, features.name = features.name, variable.all = TRUE)
+net.up.HFD_KO.HFD_WT <- subsetCommunication(cellchat.merged.HFD_KO.HFD_WT, net = net.HFD_KO.HFD_WT, datasets = "HFD_KO",ligand.logFC = 0.05, receptor.logFC = NULL)
+net.down.HFD_KO.HFD_WT <- subsetCommunication(cellchat.merged.HFD_KO.HFD_WT, net = net.HFD_KO.HFD_WT, datasets = "HFD_WT",ligand.logFC = -0.05, receptor.logFC = NULL)
+
+
+net.HFD_KO.HFD_WT$index=paste(net.HFD_KO.HFD_WT$source, net.HFD_KO.HFD_WT$target, net.HFD_KO.HFD_WT$interaction_name,sep = ".")
+net.up.HFD_KO.HFD_WT$index=paste(net.up.HFD_KO.HFD_WT$source, net.up.HFD_KO.HFD_WT$target, net.up.HFD_KO.HFD_WT$interaction_name,sep = ".")
+net.down.HFD_KO.HFD_WT$index=paste(net.down.HFD_KO.HFD_WT$source, net.down.HFD_KO.HFD_WT$target, net.down.HFD_KO.HFD_WT$interaction_name,sep = ".")
+net.HFD_KO.HFD_WT$group="HFD_KO.HFD_WT"
+net.up.HFD_KO.HFD_WT$group="HFD_KO.HFD_WT"
+net.down.HFD_KO.HFD_WT$group="HFD_KO.HFD_WT"
+
+write.csv(net.HFD_KO.HFD_WT,file="net.HFD_KO.HFD_WT.csv")
+write.csv(net.up.HFD_KO.HFD_WT,file="net.up.HFD_KO.HFD_WT.csv")
+write.csv(net.down.HFD_KO.HFD_WT,file="net.down.HFD_KO.HFD_WT.csv")
+
+
+net.up.HFD_KO.HFD_WT.and.HFD_KO.ND_KO=intersect(net.up.HFD_KO.HFD_WT$index, net.up.HFD_KO.ND_KO$index)
+tmp1=net.up.HFD_KO.ND_KO[match(net.up.HFD_KO.HFD_WT.and.HFD_KO.ND_KO, net.up.HFD_KO.ND_KO$index),]
+tmp2=net.up.HFD_KO.HFD_WT[match(net.up.HFD_KO.HFD_WT.and.HFD_KO.ND_KO, net.up.HFD_KO.HFD_WT$index),]
+net.up.HFD_KO.HFD_WT.and.HFD_KO.ND_KO=cbind(tmp1,tmp2)
+write.csv(net.up.HFD_KO.HFD_WT.and.HFD_KO.ND_KO,file="net.up.HFD_KO.HFD_WT.and.HFD_KO.ND_KO.csv")
+
+net.down.HFD_KO.HFD_WT.and.HFD_KO.ND_KO=intersect(net.down.HFD_KO.HFD_WT$index, net.down.HFD_KO.ND_KO$index)
+tmp1=net.down.HFD_KO.ND_KO[match(net.down.HFD_KO.HFD_WT.and.HFD_KO.ND_KO, net.down.HFD_KO.ND_KO$index),]
+tmp2=net.down.HFD_KO.HFD_WT[match(net.down.HFD_KO.HFD_WT.and.HFD_KO.ND_KO, net.down.HFD_KO.HFD_WT$index),]
+net.down.HFD_KO.HFD_WT.and.HFD_KO.ND_KO=cbind(tmp1,tmp2)
+write.csv(net.down.HFD_KO.HFD_WT.and.HFD_KO.ND_KO,file="net.down.HFD_KO.HFD_WT.and.HFD_KO.ND_KO.csv")
+
+
+
+####################################################################################################################
+###########################CXCL network plot
+pdf(file="colon.netVisual_aggregate.CXCL.pdf",width=12,height=4)
+pathways.show <- c("CXCL") 
+weight.max <- getMaxWeight(object.list, slot.name = c("netP"), attribute = pathways.show) # control the edge weights across different datasets
+par(mfrow = c(1,2), xpd=TRUE)
+for (i in 1:length(object.list)) {
+  netVisual_aggregate(object.list[[i]], signaling = pathways.show, layout = "circle", edge.weight.max = weight.max[1], edge.width.max = 10, signaling.name = paste(pathways.show, names(object.list)[i]))
 }
+dev.off()
+
+####################################################################################################################
+# Cxcl L-R ppair visualize
+pairLR.use.up=net.up.HFD_KO.ND_KO[net.up.HFD_KO.ND_KO$pathway_name=="CXCL",]
+pairLR.use.up = pairLR.use.up[, "interaction_name", drop = F]
+
+pdf(file="colon.netVisual_bubble.hfdko.ndko.cxcl.sigdif.pdf",width=12,height=4)
+gg1 <- netVisual_bubble(cellchat.merged, pairLR.use = pairLR.use.up, sources.use = c(1:9), targets.use = c(1:9), comparison = c(3, 1),  angle.x = 90, remove.isolate = T,title.name = paste0("Up-regulated signaling in ", names(object.list)[1]))
+pairLR.use.down = net.down.HFD_KO.ND_KO[, "interaction_name", drop = F]
+gg1
+dev.off()
+
+pdf(file="colon.netVisual_bubble.hfdko.hfdwt.cxcl.sigdif.pdf",width=12,height=4)
+gg1 <- netVisual_bubble(cellchat.merged, pairLR.use = pairLR.use.up, sources.use = c(1:9), targets.use = c(1:9), comparison = c(2, 1),  angle.x = 90, remove.isolate = T,title.name = paste0("Up-regulated signaling in ", names(object.list)[1]))
+pairLR.use.down = net.down.HFD_KO.ND_KO[, "interaction_name", drop = F]
+gg1
+dev.off()
+
+
+#return results for visualize the comparison of hfdko.ndko and hfdko.hfdwt in the same figure
+tmp <- netVisual_bubble(cellchat.merged, pairLR.use = pairLR.use.up, sources.use = c(1:9), targets.use = c(1:9), comparison = c(2, 3, 1),angle.x = 90, remove.isolate = T,title.name = paste0("Up-regulated signaling in ", names(object.list)[1]),return.data = T)
+
+write.csv(tmp$communication,file="cxcl_allgroups.csv")
+tmp=tmp$communication
+tmp$ygroup=paste(tmp$interaction_name,tmp$dataset,sep="(")
+tmp$ygroup=paste(tmp$ygroup,")",sep="")
+tmp=tmp[,c("prob","group.names","ygroup","pval")]
 
 library(ggplot2)
-library(ggrepel)  
-library(dplyr)    
 
-#data for plot
-df <- data.frame(
-  Regulon = fat.tf.common.T_cell$regulon,
-  Delta_KO_ND = fat.tf.common.T_cell$delta,       
-  Delta_KO_WT = fat.tf.common.T_cell$delta.1,     
-  Direction = factor(fat.tf.common.T_cell$direction, levels = c("up", "down")),
-  Delta_Mean = fat.tf.common.T_cell$delta.mean,     
-  logfc.mean = fat.tf.common.T_cell$logfc.mean
+tmp$group.names <- factor(tmp$group.names, levels = unique(tmp$group.names))
+tmp$ygroup <- factor(tmp$ygroup, levels = unique(tmp$ygroup))
+
+############plot regroup, macrophage first
+macrophage_cells <- grep("^Macrophage", unique(tmp$group.names), value = TRUE)
+
+#Construct a new order: "Macrophage" at the beginning + remaining categories
+new_order <- c(
+  macrophage_cells,  
+  setdiff(unique(tmp$group.names), macrophage_cells)  
 )
 
-data_range <- range(c(df$Delta_KO_ND, df$Delta_KO_WT))
-max_abs <- max(abs(data_range)) * 1.05  
-limit <- c(-max_abs, max_abs)
-
-#color mapping
-color_mapping <- c("up" = "#AA0000", "down" = "#0066FF")
+# group into factor
+tmp$group.names <- factor(tmp$group.names, levels = new_order)
 
 
-# top 5 highest and lowest delta.mean 
-top_high <- df %>%
-  arrange(desc(Delta_Mean)) %>%
-  slice_head(n = 5) %>%
-  mutate(Label_Type = "High")
+#####
+pdf(file="colon.netVisual_bubble.allgroup.cxcl.all.sigdif.pdf",width=13,height=6)
 
-top_low <- df %>%
-  arrange(Delta_Mean) %>%
-  slice_head(n = 5) %>%
-  mutate(Label_Type = "Low")
-
-extreme_points <- bind_rows(top_high, top_low)
-
-# scatter plot
-p <- ggplot(df, aes(x = Delta_KO_ND, y = Delta_KO_WT)) +
-  geom_point(aes(color = Direction), size = 3, alpha = 0.7) +
-  
-  scale_color_manual(values = color_mapping) +
-  scale_x_continuous(expand = c(0, 0)) +
-  scale_y_continuous(expand = c(0, 0)) +
-  # add Axis
-  geom_hline(yintercept = 0, color = "black", linewidth = 0.5) +
-  geom_vline(xintercept = 0, color = "black", linewidth = 0.5) +
-  coord_equal(ratio = 1, xlim = limit, ylim = limit) +
-  
-  # Axis labels
-  labs(
-    x = "Delta in HFD.KO vs ND.KO",
-    y = "Delta in HFD.KO vs HFD.WT",
-    color = "Regulation Direction"
+ggplot(tmp, aes(
+  x = group.names, 
+  y = ygroup, 
+  color = prob, 
+  size = pval
+)) +
+  geom_point(alpha = 0.8, stroke = 1.5) +
+  scale_color_gradientn(
+    colours = c("#2c7bb6", "#abd9e9", "#ffffbf", "#fdae61", "#d7191c"),
+    values = scales::rescale(c(0, 0.2, 0.5, 0.8, 1))
+  )+
+  scale_size_continuous(
+    name = "P-value", 
+    range = c(4, 6),
+    breaks = c(3)
   ) +
-  
-  # theme optimazation
-  theme_minimal() +
-  theme(
-    panel.grid.major = element_blank(),   
-    panel.grid.minor = element_blank(),   
-    panel.background = element_blank(),  
-    axis.line = element_line(color = "black")
-  )
-
-# Add extreme point labels
-p_labeled <- p +
-  geom_point(data = extreme_points, aes(color = Direction), size = 4, shape = 1, stroke = 1.5) +
-  ggrepel::geom_text_repel(
-    data = extreme_points,
-    aes(label = paste0(Regulon, "\n(", round(logfc.mean, 2), ")")),
-    size = 3.5,
-    color = "black",
-    box.padding = 0.6,
-    max.overlaps = 20,
-    segment.color = "gray50"
-  )
-
-# save plot
-pdf(file="T_cell_tf.Delta.dotplot.pdf", width = 8, height = 8)
-print(p_labeled)
-dev.off()
-
-
-#####################################################################################
-#Macrophage
-df <- data.frame(
-  Regulon = fat.tf.common.Macrophage$regulon,
-  Delta_KO_ND = fat.tf.common.Macrophage$delta, 
-  Delta_KO_WT = fat.tf.common.Macrophage$delta.1,
-  Direction = factor(fat.tf.common.Macrophage$direction, levels = c("up", "down")),
-  Delta_Mean = fat.tf.common.Macrophage$delta.mean,
-  logfc.mean = fat.tf.common.Macrophage$logfc.mean
-)
-data_range <- range(c(df$Delta_KO_ND, df$Delta_KO_WT))
-max_abs <- max(abs(data_range)) * 1.05
-limit <- c(-max_abs, max_abs)
-color_mapping <- c("up" = "#AA0000", "down" = "#0066FF")
-top_high <- df %>%
-  arrange(desc(Delta_Mean)) %>%
-  slice_head(n = 5) %>%
-  mutate(Label_Type = "High")
-
-top_low <- df %>%
-  arrange(Delta_Mean) %>%
-  slice_head(n = 5) %>%
-  mutate(Label_Type = "Low")
-
-extreme_points <- bind_rows(top_high, top_low)
-
-p <- ggplot(df, aes(x = Delta_KO_ND, y = Delta_KO_WT)) +
-  geom_point(aes(color = Direction), size = 3, alpha = 0.7) +
-  
-  scale_color_manual(values = color_mapping) +
-  scale_x_continuous(expand = c(0, 0)) +
-  scale_y_continuous(expand = c(0, 0)) +
-  geom_hline(yintercept = 0, color = "black", linewidth = 0.5) +
-  geom_vline(xintercept = 0, color = "black", linewidth = 0.5) +
-  coord_equal(ratio = 1, xlim = limit, ylim = limit) +
   labs(
-    x = "Delta in HFD.KO vs ND.KO",
-    y = "Delta in HFD.KO vs HFD.WT",
-    color = "Regulation Direction"
+    x = "Cell-Cell Interaction", 
+    y = "Signaling Pathway Group",
+    title = "Cell Interaction Probability and Significance"
   ) +
   theme_minimal() +
   theme(
-    panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank(),
-    panel.background = element_blank(),
-    axis.line = element_line(color = "black")
-  )
-p_labeled <- p +
-  geom_point(data = extreme_points, aes(color = Direction), size = 4, shape = 1, stroke = 1.5) +
-  ggrepel::geom_text_repel(
-    data = extreme_points,
-    aes(label = paste0(Regulon, "\n(", round(logfc.mean, 2), ")")),
-    size = 3.5,
-    color = "black",
-    box.padding = 0.6,
-    max.overlaps = 20,
-    segment.color = "gray50"
-  )
-
-
-pdf(file="Macrophage_tf.Delta.dotplot.pdf", width = 8, height = 8)
-print(p_labeled)
-dev.off()
-
-
-#####################################################################################
-#DC
-
-df <- data.frame(
-  Regulon = fat.tf.common.DC$regulon,
-  Delta_KO_ND = fat.tf.common.DC$delta,
-  Delta_KO_WT = fat.tf.common.DC$delta.1,
-  Direction = factor(fat.tf.common.DC$direction, levels = c("up", "down")),
-  Delta_Mean = fat.tf.common.DC$delta.mean,
-  logfc.mean = fat.tf.common.DC$logfc.mean
-)
-
-data_range <- range(c(df$Delta_KO_ND, df$Delta_KO_WT))
-max_abs <- max(abs(data_range)) * 1.05
-limit <- c(-max_abs, max_abs)
-
-color_mapping <- c("up" = "#AA0000", "down" = "#0066FF")
-
-top_high <- df %>%
-  arrange(desc(Delta_Mean)) %>%
-  slice_head(n = 5) %>%
-  mutate(Label_Type = "High")
-
-top_low <- df %>%
-  arrange(Delta_Mean) %>%
-  slice_head(n = 5) %>%
-  mutate(Label_Type = "Low")
-
-extreme_points <- bind_rows(top_high, top_low)
-
-p <- ggplot(df, aes(x = Delta_KO_ND, y = Delta_KO_WT)) +
-  geom_point(aes(color = Direction), size = 3, alpha = 0.7) +
-  
-  scale_color_manual(values = color_mapping) +
-  scale_x_continuous(expand = c(0, 0)) +
-  scale_y_continuous(expand = c(0, 0)) +
-  geom_hline(yintercept = 0, color = "black", linewidth = 0.5) +
-  geom_vline(xintercept = 0, color = "black", linewidth = 0.5) +
-  coord_equal(ratio = 1, xlim = limit, ylim = limit) +
-  
-  labs(
-    x = "Delta in HFD.KO vs ND.KO",
-    y = "Delta in HFD.KO vs HFD.WT",
-    color = "Regulation Direction"
-  ) +
-  theme_minimal() +
-  theme(
-    panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank(),
-    panel.background = element_blank(),
-    axis.line = element_line(color = "black")
-  )
-
-p_labeled <- p +
-  geom_point(data = extreme_points, aes(color = Direction), size = 4, shape = 1, stroke = 1.5) +
-  ggrepel::geom_text_repel(
-    data = extreme_points,
-    aes(label = paste0(Regulon, "\n(", round(logfc.mean, 2), ")")),
-    size = 3.5,
-    color = "black",
-    box.padding = 0.6,
-    max.overlaps = 20,
-    segment.color = "gray50"
-  )
-pdf(file="DC_tf.Delta.dotplot.pdf", width = 8, height = 8)
-print(p_labeled)
-dev.off()
-
-
-#####################################################################################
-#B cell
-
-df <- data.frame(
-  Regulon = fat.tf.common.B_cell$regulon,
-  Delta_KO_ND = fat.tf.common.B_cell$delta,
-  Delta_KO_WT = fat.tf.common.B_cell$delta.1,
-  Direction = factor(fat.tf.common.B_cell$direction, levels = c("up", "down")),
-  Delta_Mean = fat.tf.common.B_cell$delta.mean,
-  logfc.mean = fat.tf.common.B_cell$logfc.mean
-)
-
-data_range <- range(c(df$Delta_KO_ND, df$Delta_KO_WT))
-max_abs <- max(abs(data_range)) * 1.05
-limit <- c(-max_abs, max_abs)
-
-
-color_mapping <- c("up" = "#AA0000", "down" = "#0066FF")
-
-top_high <- df %>%
-  arrange(desc(Delta_Mean)) %>%
-  slice_head(n = 5) %>%
-  mutate(Label_Type = "High")
-
-top_low <- df %>%
-  arrange(Delta_Mean) %>%
-  slice_head(n = 5) %>%
-  mutate(Label_Type = "Low")
-
-extreme_points <- bind_rows(top_high, top_low)
-
-p <- ggplot(df, aes(x = Delta_KO_ND, y = Delta_KO_WT)) +
-  geom_point(aes(color = Direction), size = 3, alpha = 0.7) +
-  scale_color_manual(values = color_mapping) +
-  scale_x_continuous(expand = c(0, 0)) +
-  scale_y_continuous(expand = c(0, 0)) +
-  geom_hline(yintercept = 0, color = "black", linewidth = 0.5) +
-  geom_vline(xintercept = 0, color = "black", linewidth = 0.5) +
-  coord_equal(ratio = 1, xlim = limit, ylim = limit) +
-  
-  labs(
-    x = "Delta in HFD.KO vs ND.KO",
-    y = "Delta in HFD.KO vs HFD.WT",
-    color = "Regulation Direction"
-  ) +
-  theme_minimal() +
-  theme(
-    panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank(),
-    panel.background = element_blank(),
-    axis.line = element_line(color = "black")
-  )
-
-p_labeled <- p +
-  geom_point(data = extreme_points, aes(color = Direction), size = 4, shape = 1, stroke = 1.5) +
-  ggrepel::geom_text_repel(
-    data = extreme_points,
-    aes(label = paste0(Regulon, "\n(", round(logfc.mean, 2), ")")),
-    size = 3.5,
-    color = "black",
-    box.padding = 0.6,
-    max.overlaps = 20,
-    segment.color = "gray50"
-  )
-
-
-pdf(file="B_cell_tf.Delta.dotplot.pdf", width = 8, height = 8)
-print(p_labeled)
-dev.off()
-
-
-##############################################################################################################
-#TF numbers across cell lineages
-##############################################################################################################
-
-library(dplyr)
-library(tidyr)
-#extract non-duplicated information
-tmp=results_ct.hfdko.ndko.and.hfdko.hfdwt.common[,1:10]
-tmp=tmp[!is.na(tmp[,1]),]
-
-#summary the numbers
-summary_df.tf.common <- tmp %>%
-  group_by(celltype, direction) %>%
-  summarise(count = n(), .groups = "drop") %>%
-  mutate(
-    celltype = reorder(celltype, count, FUN = sum)  # Rank by total genes (descending)
-  )
-summary_df.tf.common
-
-#bar plot
-pdf(file="fat.pancelltype.overlap.detfs.number.counts.pdf",width=6,height=6)
-ggplot(summary_df.tf.common, aes(y = celltype, x = count, fill = direction)) +
-  geom_bar(stat = "identity", position = "stack") +
-  geom_text(
-    aes(label = count), 
-    position = position_stack(vjust = 0.5),
-    color = "black",  # Changed from white to black
-    size = 4,        # Increased from 3.5
-    fontface = "bold"
-  ) +
-  scale_fill_manual(
-    values = c("down" = "#99CCFF", "up" = "#FFCCCC"),
-    labels = c("Downregulated", "Upregulated")
-  ) +
-  labs(
-    y = "Cell Lineage", 
-    x = "Number of TFs", 
-    title = "Differentially Regulated TFs by Cell Lineage",
-    fill = "Regulation"
-  ) +
-  theme_minimal() +
-  theme(
-    axis.text = element_text(size = 11, color = "black"),  # Larger text for both axes
-    axis.title = element_text(size = 12, color = "black"), # Larger axis titles
-    axis.text.y = element_text(size = 11, color = "black"), # Specific y-axis text
-    plot.title = element_text(hjust = 0.5, face = "bold", size = 13, color = "black"),
-    legend.position = "top",
-    legend.text = element_text(size = 11, color = "black"),  # Larger legend text
-    legend.title = element_text(size = 12, color = "black"), # Larger legend title
-    panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank(),
-    panel.border = element_rect(colour = "black", fill = NA, size = 0.5)
+    axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1),
+    panel.grid.major = element_line(color = "grey90", linewidth = 0.2),
+    legend.position = "right"
   )
 dev.off()
+
+
+
+
+
+

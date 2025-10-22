@@ -33,7 +33,7 @@ mypal_4<-unlist(mapply(brewer.pal, brewer.pal.info[brewer.pal.info$category == '
 mypal_5<-c("#466791","#60bf37","#953ada","#4fbe6c","#ce49d3","#a7b43d","#5a51dc","#d49f36","#552095","#507f2d","#db37aa","#84b67c","#a06fda","#df462a","#5b83db","#c76c2d","#4f49a3","#82702d","#dd6bbb","#334c22","#d83979","#55baad","#dc4555","#62aad3","#8c3025","#417d61","#862977","#bba672","#403367","#da8a6d","#a79cd4","#71482c","#c689d0","#6b2940","#d593a7","#895c8b","#bd5975")
 mypal_6<-c('#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4', '#46f0f0', '#f032e6', '#bcf60c', '#fabebe', '#008080', '#e6beff', '#9a6324', '#fffac8', '#800000', '#aaffc3', '#808000', '#ffd8b1', '#000075', '#808080', '#ffffff', '#000000')
 
-counts_fat12<- Read10X_h5("./filtered_feature_bc_matrix.fat.h5")
+counts_fat12<- Read10X_h5("./feature_bc_matrix.adipose.h5")
 
 ##split sample id index
 sample_ids <- sapply(colnames(counts_fat12), function(bc) {
@@ -240,19 +240,18 @@ merged_seurat_fat <- FindNeighbors(merged_seurat_fat, reduction = "harmony", dim
 merged_seurat_fat <- RunUMAP(merged_seurat_fat, reduction = "harmony", dims = 1:30, return.model = T, verbose = F)
 merged_seurat_fat <- FindClusters(merged_seurat_fat, resolution = 0.2)
 
-
+#Dimplot
 png(file="dimplot.umap.cluster.label.fat.harmony.merge.dim30.res060.then.res0.2.png",width=900,height=800)
 DimPlot(merged_seurat_fat, reduction = "umap",cols = mypal_3,label = TRUE,raster=FALSE)
 dev.off()
 
-
+#Marker Feature plot
 png(file="fat.feature.plot.harmony.png",width=1500,height=900)
 FeaturePlot(merged_seurat_fat, features = c("Ptprc","Cd3e","Cd8a","Cd4",
                                             "Trdc","Nkg7","Cd79a","Jchain",
                                             "C1qa","Adgre1","Cd86","Cd163","S100a8",
                                             "Flt3","Kit","Gata3"),raster=FALSE,min.cutoff =0,ncol=5,reduction = "umap",cols= c("gray90", "red"))
 dev.off()
-
 
 
 
@@ -265,12 +264,6 @@ fat.merged.harmony.markers <- FindAllMarkers(merged_seurat_fat, only.pos = TRUE)
 write.csv(fat.merged.harmony.markers,file = './fat.merged.harmony.markers.afterfilter.csv')
 
 ####annotation cell types
-merged_seurat_fat <- RenameIdents(
-  merged_seurat_fat, '0' = 'Macrophage_Ednrb','1' = 'B_cell','2' = 'Macrophage_Vcam1','3' = 'Macrophage_Ear2',
-  '4' = 'CD8_T','5' = 'CD4_T','6' = 'cDC2','7' = 'NK',
-  '8' = 'gd_T','9' = 'cDC1','10' = 'Mast','11' = 'DC_Fscn1',
-  '12' = 'ILC2','13' = 'Neutrophil','14' = 'Macrophage_Gngt2','15' = 'Plasma')
-
 ###celltypes mapping to cell lineage
 merged_seurat_fat <- RenameIdents(
   merged_seurat_fat, '0' = 'Macrophage_Gas6','1' = 'B_cell','2' = 'Macrophage_Vcam1','3' = 'Macrophage_Ear2',
@@ -905,172 +898,6 @@ wilcox.test(Nfkb2_HFD_KO_mac, Nfkb2_ND_KO_mac)
 
 
 
-###############################################################
-###############################################################
-#####fat m1 m2
-m2.markers=c("Il4ra","Ccl4","Ccl20","Ccl17","Ccl22","Ccl24","Lyve1","Vegfa","Vegfb",
-             "Vegfc","Vegfd","Egf","Ctsa","Ctsb","Ctsc","Ctsd","Tgfb1","Tgfb2","Tgfb3",
-             "Mmp14","Mmp19","Mmp9","Clec7a","Wnt7b","Fasl","Tnfsf12","Tnfsf8","Cd276",
-             "Vtcn1","Msr1","Fn1","Irf4","Cd163","Egr2")
-
-m1.markers=c("Il23a","Tnf","Cxcl9","Cxcl10","Cxcl11","Cd86","Il1a","Il1b","Il6","Ccl5","Irf5","Irf1",
-             "Cd40","Ido1","Kynu","Ccr7")
-
-##Using AUCELL to compute M1 and M2 signature score
-geneSets.m1=list(
-  m1.genes = m1.markers
-)
-set.seed(100)
-cells_AUC <- AUCell_calcAUC(
-  geneSets.m1, 
-  cells_rankings,
-  aucMaxRank = 950,
-)
-
-m1_scores <- getAUC(cells_AUC)["m1.genes", ]
-merged_seurat_fat$m1_scores <- m1_scores
-
-####m2
-geneSets.m2=list(
-  m2.genes = m2.markers
-)
-set.seed(100)
-cells_AUC <- AUCell_calcAUC(
-  geneSets.m2, 
-  cells_rankings,
-  aucMaxRank = 950
-)
-
-m2_scores <- getAUC(cells_AUC)["m2.genes", ]
-merged_seurat_fat$m2_scores <- m2_scores
-
-
-
-fat.mac <- subset(merged_seurat_fat, 
-                  subset = celllineage %in% c("Macrophage"))
-##################################################m1 m2 score plot
-library(ggrepel)
-m1m2avg_scores <- fat.mac@meta.data %>%
-  group_by(celltype) %>%
-  summarise(
-    avg_m1 = mean(m1_scores, na.rm = TRUE),
-    avg_m2 = mean(m2_scores, na.rm = TRUE)
-  )
-
-
-p <- ggplot(m1m2avg_scores, aes(x = avg_m1, y = avg_m2, color = celltype)) +
-  geom_point(size = 8, alpha = 0.8) +
-  geom_text_repel(aes(label = celltype), size = 5, point.padding = 0.8) +
-  scale_color_brewer(palette = "Set1") +
-  labs(x = "M1 Score", y = "M2 Score", 
-       title = "Macrophage Subtype Polarization") +
-  theme_minimal(base_size = 14) +
-  theme(legend.position = "none",
-        plot.title = element_text(hjust = 0.5, face = "bold"))
-pdf(file="m1m2score.dotplot.pdf",width=8,height=8)
-print(p)
-dev.off()
-
-
-##################################################################################
-########## m1 m2 ratio
-##################################################################################
-
-library(tidyverse)
-meta_data <- fat.mac@meta.data %>%
-  dplyr::select(sample, group, celltype)
-
-cell_counts <- meta_data %>%
-  filter(celltype %in% c("Macrophage_Ear2", "Macrophage_Gas6")) %>%
-  group_by(sample, group, celltype) %>%
-  tally(name = "cell_num") %>%
-  tidyr::spread(key = celltype, value = cell_num, fill = 0)
-
-
-ratio_data <- cell_counts %>%
-  mutate(ratio = Macrophage_Ear2 / Macrophage_Gas6) %>%
-  dplyr::select(sample, group, ratio)
-
-
-head(ratio_data)
-
-####ratio test
-cols=c("#FF8080", "#FDCABF","#9B8EB6")
-pdf(file="hfdko_hfdwt_ndko.m1m2ratio.pdf",width=6,height=5)
-ggplot(ratio_data[1:9,], aes(x = group, y = ratio, fill = group)) +
-  geom_boxplot(width = 0.6, alpha = 0.7, outlier.shape = NA) +
-  geom_jitter(width = 0.1, size = 3, alpha = 0.8) +
-  scale_fill_manual(values = c("HFD_KO" = "#FF8080", "HFD_WT" = "#FDCABF","ND_KO" = "#9B8EB6")) +
-  labs(x = NULL, y = "Macrophage_Ear2 / Macrophage_Gas6 Ratio",
-       title = "") +
-  theme_classic(base_size = 14) +
-  theme(legend.position = "none",
-        plot.title = element_text(face = "bold", hjust = 0.5))
-dev.off()
-
-
-##HFD_KO Vs HFD_WT
-hfd_data <- ratio_data %>% 
-  filter(group %in% c("HFD_KO", "HFD_WT"))
-
-wilcox_test <- wilcox.test(ratio ~ group, data = hfd_data)
-p_value <- wilcox_test$p.value
-
-
-mean_diff <- hfd_data %>%
-  group_by(group) %>%
-  summarise(mean_ratio = mean(ratio)) %>%
-  spread(key = group, value = mean_ratio) %>%
-  mutate(diff_ratio = HFD_KO - HFD_WT)
-
-
-cat("HFD_KO vs. HFD_WT: p =", round(p_value, 4), 
-    "| Mean Ratio Diff =", round(mean_diff$diff_ratio, 2))
-
-pdf(file="hfdko_hfdwt.m1m2ratio.pdf",width=6,height=6)
-ggplot(hfd_data, aes(x = group, y = ratio, fill = group)) +
-  geom_boxplot(width = 0.6, alpha = 0.7, outlier.shape = NA) +
-  geom_jitter(width = 0.1, size = 3, alpha = 0.8) +
-  scale_fill_manual(values = c("HFD_KO" = "#FF8080", "HFD_WT" = "#FDCABF")) +
-  labs(x = NULL, y = "Macrophage_Ear2 / Macrophage_Gas6 Ratio",
-       title = "diff=0.14, p=0.4",
-       caption = paste("Mean Diff =", round(mean_diff$diff_ratio, 2))) +
-  theme_classic(base_size = 14) +
-  theme(legend.position = "none",
-        plot.title = element_text(face = "bold", hjust = 0.5))
-dev.off()
-
-
-
-##HFD_KO Vs NK_KO
-hfd_data <- ratio_data %>% 
-  filter(group %in% c("HFD_KO", "ND_KO"))
-
-wilcox_test <- wilcox.test(ratio ~ group, data = hfd_data)
-p_value <- wilcox_test$p.value
-
-mean_diff <- hfd_data %>%
-  group_by(group) %>%
-  summarise(mean_ratio = mean(ratio)) %>%
-  spread(key = group, value = mean_ratio) %>%
-  mutate(diff_ratio = HFD_KO - ND_KO)
-
-cat("HFD_KO vs. ND_KO: p =", round(p_value, 4), 
-    "| Mean Ratio Diff =", round(mean_diff$diff_ratio, 2))
-
-pdf(file="hfdko_ndko.m1m2ratio.pdf",width=6,height=6)
-ggplot(hfd_data, aes(x = group, y = ratio, fill = group)) +
-  geom_boxplot(width = 0.6, alpha = 0.7, outlier.shape = NA) +
-  geom_jitter(width = 0.1, size = 3, alpha = 0.8) +
-  scale_fill_manual(values = c("HFD_KO" = "#FF8080", "ND_KO" = "#FDCABF")) +
-  labs(x = NULL, y = "Macrophage_Ear2 / Macrophage_Gas6 Ratio",
-       title = "diff=0.15, p=0.4",
-       caption = paste("Mean Diff =", round(mean_diff$diff_ratio, 2))) +
-  theme_classic(base_size = 14) +
-  theme(legend.position = "none",
-        plot.title = element_text(face = "bold", hjust = 0.5))
-dev.off()
-
 
 
 ###################################################################################
@@ -1679,5 +1506,181 @@ dev.off()
 
 
 
+###############################################################
+###############################################################
+#####fat m1 m2
+m2.markers=c("Il4ra","Ccl4","Ccl20","Ccl17","Ccl22","Ccl24","Lyve1","Vegfa","Vegfb",
+             "Vegfc","Vegfd","Egf","Ctsa","Ctsb","Ctsc","Ctsd","Tgfb1","Tgfb2","Tgfb3",
+             "Mmp14","Mmp19","Mmp9","Clec7a","Wnt7b","Fasl","Tnfsf12","Tnfsf8","Cd276",
+             "Vtcn1","Msr1","Fn1","Irf4","Cd163","Egr2")
+
+m1.markers=c("Il23a","Tnf","Cxcl9","Cxcl10","Cxcl11","Cd86","Il1a","Il1b","Il6","Ccl5","Irf5","Irf1",
+             "Cd40","Ido1","Kynu","Ccr7")
+
+##Using AUCELL to compute M1 and M2 signature score
+geneSets.m1=list(
+  m1.genes = m1.markers
+)
+set.seed(100)
+cells_AUC <- AUCell_calcAUC(
+  geneSets.m1, 
+  cells_rankings,
+  aucMaxRank = 950,
+)
+
+m1_scores <- getAUC(cells_AUC)["m1.genes", ]
+merged_seurat_fat$m1_scores <- m1_scores
+
+####m2
+geneSets.m2=list(
+  m2.genes = m2.markers
+)
+set.seed(100)
+cells_AUC <- AUCell_calcAUC(
+  geneSets.m2, 
+  cells_rankings,
+  aucMaxRank = 950
+)
+
+m2_scores <- getAUC(cells_AUC)["m2.genes", ]
+merged_seurat_fat$m2_scores <- m2_scores
 
 
+
+fat.mac <- subset(merged_seurat_fat, 
+                  subset = celllineage %in% c("Macrophage"))
+##################################################m1 m2 score plot
+library(ggrepel)
+m1m2avg_scores <- fat.mac@meta.data %>%
+  group_by(celltype) %>%
+  summarise(
+    avg_m1 = mean(m1_scores, na.rm = TRUE),
+    avg_m2 = mean(m2_scores, na.rm = TRUE)
+  )
+
+
+p <- ggplot(m1m2avg_scores, aes(x = avg_m1, y = avg_m2, color = celltype)) +
+  geom_point(size = 8, alpha = 0.8) +
+  geom_text_repel(aes(label = celltype), size = 5, point.padding = 0.8) +
+  scale_color_brewer(palette = "Set1") +
+  labs(x = "M1 Score", y = "M2 Score", 
+       title = "Macrophage Subtype Polarization") +
+  theme_minimal(base_size = 14) +
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5, face = "bold"))
+pdf(file="m1m2score.dotplot.pdf",width=8,height=8)
+print(p)
+dev.off()
+
+
+##################################################################################
+########## m1 m2 ratio
+##################################################################################
+
+library(tidyverse)
+meta_data <- fat.mac@meta.data %>%
+  dplyr::select(sample, group, celltype)
+
+cell_counts <- meta_data %>%
+  filter(celltype %in% c("Macrophage_Ear2", "Macrophage_Gas6")) %>%
+  group_by(sample, group, celltype) %>%
+  tally(name = "cell_num") %>%
+  tidyr::spread(key = celltype, value = cell_num, fill = 0)
+
+
+ratio_data <- cell_counts %>%
+  mutate(ratio = Macrophage_Ear2 / Macrophage_Gas6) %>%
+  dplyr::select(sample, group, ratio)
+
+
+head(ratio_data)
+
+####ratio test
+cols=c("#FF8080", "#FDCABF","#9B8EB6")
+pdf(file="hfdko_hfdwt_ndko.m1m2ratio.pdf",width=6,height=5)
+ggplot(ratio_data[1:9,], aes(x = group, y = ratio, fill = group)) +
+  geom_boxplot(width = 0.6, alpha = 0.7, outlier.shape = NA) +
+  geom_jitter(width = 0.1, size = 3, alpha = 0.8) +
+  scale_fill_manual(values = c("HFD_KO" = "#FF8080", "HFD_WT" = "#FDCABF","ND_KO" = "#9B8EB6")) +
+  labs(x = NULL, y = "Macrophage_Ear2 / Macrophage_Gas6 Ratio",
+       title = "") +
+  theme_classic(base_size = 14) +
+  theme(legend.position = "none",
+        plot.title = element_text(face = "bold", hjust = 0.5))
+dev.off()
+
+
+##HFD_KO Vs HFD_WT
+hfd_data <- ratio_data %>% 
+  filter(group %in% c("HFD_KO", "HFD_WT"))
+
+wilcox_test <- wilcox.test(ratio ~ group, data = hfd_data)
+p_value <- wilcox_test$p.value
+
+
+mean_diff <- hfd_data %>%
+  group_by(group) %>%
+  summarise(mean_ratio = mean(ratio)) %>%
+  spread(key = group, value = mean_ratio) %>%
+  mutate(diff_ratio = HFD_KO - HFD_WT)
+
+
+cat("HFD_KO vs. HFD_WT: p =", round(p_value, 4), 
+    "| Mean Ratio Diff =", round(mean_diff$diff_ratio, 2))
+
+pdf(file="hfdko_hfdwt.m1m2ratio.pdf",width=6,height=6)
+ggplot(hfd_data, aes(x = group, y = ratio, fill = group)) +
+  geom_boxplot(width = 0.6, alpha = 0.7, outlier.shape = NA) +
+  geom_jitter(width = 0.1, size = 3, alpha = 0.8) +
+  scale_fill_manual(values = c("HFD_KO" = "#FF8080", "HFD_WT" = "#FDCABF")) +
+  labs(x = NULL, y = "Macrophage_Ear2 / Macrophage_Gas6 Ratio",
+       title = "diff=0.14, p=0.4",
+       caption = paste("Mean Diff =", round(mean_diff$diff_ratio, 2))) +
+  theme_classic(base_size = 14) +
+  theme(legend.position = "none",
+        plot.title = element_text(face = "bold", hjust = 0.5))
+dev.off()
+
+
+
+##HFD_KO Vs NK_KO
+hfd_data <- ratio_data %>% 
+  filter(group %in% c("HFD_KO", "ND_KO"))
+
+wilcox_test <- wilcox.test(ratio ~ group, data = hfd_data)
+p_value <- wilcox_test$p.value
+
+mean_diff <- hfd_data %>%
+  group_by(group) %>%
+  summarise(mean_ratio = mean(ratio)) %>%
+  spread(key = group, value = mean_ratio) %>%
+  mutate(diff_ratio = HFD_KO - ND_KO)
+
+cat("HFD_KO vs. ND_KO: p =", round(p_value, 4), 
+    "| Mean Ratio Diff =", round(mean_diff$diff_ratio, 2))
+
+pdf(file="hfdko_ndko.m1m2ratio.pdf",width=6,height=6)
+ggplot(hfd_data, aes(x = group, y = ratio, fill = group)) +
+  geom_boxplot(width = 0.6, alpha = 0.7, outlier.shape = NA) +
+  geom_jitter(width = 0.1, size = 3, alpha = 0.8) +
+  scale_fill_manual(values = c("HFD_KO" = "#FF8080", "ND_KO" = "#FDCABF")) +
+  labs(x = NULL, y = "Macrophage_Ear2 / Macrophage_Gas6 Ratio",
+       title = "diff=0.15, p=0.4",
+       caption = paste("Mean Diff =", round(mean_diff$diff_ratio, 2))) +
+  theme_classic(base_size = 14) +
+  theme(legend.position = "none",
+        plot.title = element_text(face = "bold", hjust = 0.5))
+dev.off()
+
+
+#save RDS
+saveRDS(merged_seurat_fat,file="merged_seurat_fat.rds")
+
+
+#save loom for pyscenic
+library(SeuratDisk)
+SaveLoom(
+  object = merged_seurat_fat,
+  filename = "merged_seurat_fat.loom",
+  overwrite = F
+)
