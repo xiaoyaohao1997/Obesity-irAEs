@@ -8,7 +8,6 @@ library(ggpubr)
 library(BiocParallel)
 library(harmony) 
 library(DoubletFinder)
-library(Cairo)
 library(SCP)
 my36colors <- c('#E5D2DD', '#53A85F', '#F1BB72', '#F3B1A0', '#D6E7A3', '#57C3F3', '#476D87',
                 '#E95C59', '#E59CC4', '#AB3282', '#23452F', '#BD956A', '#8C549C', '#585658',
