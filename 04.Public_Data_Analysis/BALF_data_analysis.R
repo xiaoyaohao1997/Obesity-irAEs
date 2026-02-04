@@ -26,7 +26,7 @@ mypal_6<-c('#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4', '#4
 
 
 
-###########################################################################Code for Human BAF data analysis (EGAS0000100676)
+###########################################################################Code for Human BAF data analysis (EGAS00001006762)
 
 #load meta data
 pneumonitis_metadata=read.table("../3086-ICI-pneumonitis_metadata.csv",sep = ",",header = T,quote = "")
@@ -717,4 +717,5 @@ ETS2TF_Control_Macrophage <- BALF_Myeloid@meta.data[which(BALF_Myeloid@meta.data
 
 wilcox.test(ETS2TF_CiP_Macrophage, ETS2TF_Control_Macrophage)
 mean(ETS2TF_CiP_Macrophage)
+
 mean(ETS2TF_Control_Macrophage)
