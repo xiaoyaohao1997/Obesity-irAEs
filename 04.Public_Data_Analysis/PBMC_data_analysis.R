@@ -30,7 +30,7 @@ mypal_6<-c('#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4', '#4
 
 #############################################################################################
 #Code for Human PBMC scRNA-seq data
-###Human PBMC scRNA-seq data was obtained from GSE28884
+###Human PBMC scRNA-seq data was obtained from GSE285888
 #load data
 seurat_matrix <- fread("GSM8712033_matrix.txt.gz", sep = "\t", header = TRUE,fill = T,data.table = F) 
 seurat.meta=read.csv("GSM8712033_metadata.csv")
@@ -735,4 +735,5 @@ wilcox.test(Ets2_activaty_severe_irAE_mac, Ets2_activaty_non_mac)
 mean(Ets2_activaty_non_mac)
 mean(Ets2_activaty_severe_irAE_mac)
 wilcox.test(Ets2_activaty_severe_irAE_mac, Ets2_activaty_non_mac)$p.value
+
 
