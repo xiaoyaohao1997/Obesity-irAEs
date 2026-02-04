@@ -10,9 +10,11 @@ Codes provided here are to perform DEGs analysis, Pathway Enrichment, Transcript
 6. Bulk_RNA_Seq_Data_Analysis: The code in R to perform DEGs analysis and pathway enrichment result visualization of BMDM Bulk RNA seq data.
 # Downloading the data
 - The raw data for single-cell RNA-seq has been deposited in GSA (https://ngdc.cncb.ac.cn/gsa/) under CRA030409.
-- The processed data for single-cell RNA-seq has been deposited in OMIX (https://ngdc.cncb.ac.cn/omix/releaseList) under OMIX012013.
+- The processed data for single-cell RNA-seq has been deposited in OMIX (https://ngdc.cncb.ac.cn/omix/release/OMIX012013) under OMIX012013.
 - The raw data for Bulk RNA-seq of BMDM has been deposited in GSA (https://ngdc.cncb.ac.cn/gsa/) under CRA030408.
-- The processed data for Bulk RNA-seq of BMDM has been deposited in OMIX (https://ngdc.cncb.ac.cn/omix/releaseList) under OMIX012014.
+- The processed data for Bulk RNA-seq of BMDM has been deposited in OMIX (https://ngdc.cncb.ac.cn/omix/release/OMIX012014) under OMIX012014.
+- Public Human PBMC dataset can be downloaded from GEO (https://www.ncbi.nlm.nih.gov/geo/) under accession GSE285888.
+- Public Human BALF dataset can be downloaded from EGA (https://ega-archive.org/) under accession EGAS00001006762.
 # Operation systems
 - Linux version 3.10.0-1062.el7.x86_64
 - Windows 10 64-bit
